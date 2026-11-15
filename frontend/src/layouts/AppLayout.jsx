@@ -1,0 +1,29 @@
+import { useState } from 'react';
+import { Outlet } from 'react-router-dom';
+import { Sidebar } from '../components/layout/Sidebar';
+import { TopBar } from '../components/layout/TopBar';
+import { ToastContainer } from '../components/common/Toast';
+import { useToast } from '../hooks/useToast';
+import { ToastContext } from '../context/ToastContext';
+
+export function AppLayout() {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { toasts, addToast, removeToast } = useToast();
+
+  return (
+    <ToastContext.Provider value={{ addToast }}>
+      <div className="flex h-screen overflow-hidden bg-slate-50 font-sans">
+        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <TopBar onMenuClick={() => setSidebarOpen(true)} />
+          <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+            <div className="max-w-7xl mx-auto">
+              <Outlet />
+            </div>
+          </main>
+        </div>
+      </div>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+    </ToastContext.Provider>
+  );
+}
