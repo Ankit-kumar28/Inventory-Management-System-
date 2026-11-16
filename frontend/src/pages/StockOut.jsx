@@ -66,7 +66,7 @@ export default function StockOut() {
     if (selectedProduct && qty > selectedProduct.quantity) {
       addToast(
         `Quantity requested (${qty}) exceeds available on-hand stock (${selectedProduct.quantity})`,
-        'danger'
+        'error'
       );
       return;
     }

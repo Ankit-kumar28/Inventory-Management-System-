@@ -3,6 +3,11 @@ import { Product } from '../models/Product.js';
 import { StockTransaction } from '../models/StockTransaction.js';
 import { TRANSACTION_TYPES } from '../constants/index.js';
 
+function isReplicaSet() {
+  const type = mongoose.connection.client?.topology?.description?.type;
+  return type === 'ReplicaSetWithPrimary' || type === 'Sharded';
+}
+
 export async function stockIn({
   productId,
   supplierId,
@@ -12,67 +17,80 @@ export async function stockIn({
   notes = '',
   userId,
 }) {
-  let dbSession = null;
-  let useTransaction = false;
+  const validSupplierId =
+    supplierId && mongoose.Types.ObjectId.isValid(supplierId) ? supplierId : null;
 
-  try {
-    dbSession = await mongoose.startSession();
-    dbSession.startTransaction();
-    useTransaction = true;
-  } catch (err) {
-    // Standalone MongoDB without replica set does not support multi-document transactions
-    dbSession = null;
-    useTransaction = false;
+  // Use replica-set multi-document transaction if cluster topology supports it
+  if (isReplicaSet()) {
+    const dbSession = await mongoose.startSession();
+    try {
+      dbSession.startTransaction();
+
+      const product = await Product.findOneAndUpdate(
+        { _id: productId, isActive: true },
+        { $inc: { quantity } },
+        { new: true, session: dbSession }
+      );
+
+      if (!product) {
+        await dbSession.abortTransaction();
+        throw { status: 404, message: 'Product not found or inactive' };
+      }
+
+      const transactionDocs = await StockTransaction.create(
+        [
+          {
+            product: productId,
+            supplier: validSupplierId,
+            transactionType: TRANSACTION_TYPES.STOCK_IN,
+            quantity,
+            unitPrice,
+            referenceNumber,
+            notes,
+            createdBy: userId,
+          },
+        ],
+        { session: dbSession }
+      );
+
+      await dbSession.commitTransaction();
+      return { transaction: transactionDocs[0], product };
+    } catch (err) {
+      await dbSession.abortTransaction();
+      throw err;
+    } finally {
+      dbSession.endSession();
+    }
+  }
+
+  // Standalone MongoDB: atomic update with compensation rollback
+  const product = await Product.findOneAndUpdate(
+    { _id: productId, isActive: true },
+    { $inc: { quantity } },
+    { new: true }
+  );
+
+  if (!product) {
+    throw { status: 404, message: 'Product not found or inactive' };
   }
 
   try {
-    const sessionOption = useTransaction ? { session: dbSession } : {};
+    const transaction = await StockTransaction.create({
+      product: productId,
+      supplier: validSupplierId,
+      transactionType: TRANSACTION_TYPES.STOCK_IN,
+      quantity,
+      unitPrice,
+      referenceNumber,
+      notes,
+      createdBy: userId,
+    });
 
-    const product = await Product.findOneAndUpdate(
-      { _id: productId, isActive: true },
-      { $inc: { quantity } },
-      { new: true, ...sessionOption }
-    );
-
-    if (!product) {
-      if (useTransaction) await dbSession.abortTransaction();
-      throw { status: 404, message: 'Product not found or inactive' };
-    }
-
-    const transactionDocs = await StockTransaction.create(
-      [
-        {
-          product: productId,
-          supplier: supplierId || null,
-          transactionType: TRANSACTION_TYPES.STOCK_IN,
-          quantity,
-          unitPrice,
-          referenceNumber,
-          notes,
-          createdBy: userId,
-        },
-      ],
-      sessionOption
-    );
-
-    if (useTransaction) {
-      await dbSession.commitTransaction();
-    }
-
-    return { transaction: transactionDocs[0], product };
+    return { transaction, product };
   } catch (err) {
-    if (useTransaction && dbSession) {
-      try {
-        await dbSession.abortTransaction();
-      } catch (abortErr) {
-        // ignore rollback abort errors
-      }
-    }
+    // Compensating rollback: reverse the increment if transaction creation fails
+    await Product.findByIdAndUpdate(productId, { $inc: { quantity: -quantity } });
     throw err;
-  } finally {
-    if (dbSession) {
-      dbSession.endSession();
-    }
   }
 }
 
@@ -84,73 +102,89 @@ export async function stockOut({
   notes = '',
   userId,
 }) {
-  let dbSession = null;
-  let useTransaction = false;
+  // Use replica-set multi-document transaction if cluster topology supports it
+  if (isReplicaSet()) {
+    const dbSession = await mongoose.startSession();
+    try {
+      dbSession.startTransaction();
 
-  try {
-    dbSession = await mongoose.startSession();
-    dbSession.startTransaction();
-    useTransaction = true;
-  } catch (err) {
-    dbSession = null;
-    useTransaction = false;
+      const product = await Product.findOneAndUpdate(
+        { _id: productId, isActive: true, quantity: { $gte: quantity } },
+        { $inc: { quantity: -quantity } },
+        { new: true, session: dbSession }
+      );
+
+      if (!product) {
+        await dbSession.abortTransaction();
+        const existing = await Product.findById(productId);
+        if (!existing || !existing.isActive) {
+          throw { status: 404, message: 'Product not found or inactive' };
+        }
+        throw {
+          status: 400,
+          message: `Insufficient stock. Available: ${existing.quantity}, Requested: ${quantity}`,
+        };
+      }
+
+      const transactionDocs = await StockTransaction.create(
+        [
+          {
+            product: productId,
+            transactionType: TRANSACTION_TYPES.STOCK_OUT,
+            quantity,
+            reason,
+            referenceNumber,
+            notes,
+            createdBy: userId,
+          },
+        ],
+        { session: dbSession }
+      );
+
+      await dbSession.commitTransaction();
+      return { transaction: transactionDocs[0], product };
+    } catch (err) {
+      await dbSession.abortTransaction();
+      throw err;
+    } finally {
+      dbSession.endSession();
+    }
+  }
+
+  // Standalone MongoDB: atomic conditional update preventing negative quantities
+  const product = await Product.findOneAndUpdate(
+    { _id: productId, isActive: true, quantity: { $gte: quantity } },
+    { $inc: { quantity: -quantity } },
+    { new: true }
+  );
+
+  if (!product) {
+    const existing = await Product.findById(productId);
+    if (!existing || !existing.isActive) {
+      throw { status: 404, message: 'Product not found or inactive' };
+    }
+    throw {
+      status: 400,
+      message: `Insufficient stock. Available: ${existing.quantity}, Requested: ${quantity}`,
+    };
   }
 
   try {
-    const sessionOption = useTransaction ? { session: dbSession } : {};
+    const transaction = await StockTransaction.create({
+      product: productId,
+      transactionType: TRANSACTION_TYPES.STOCK_OUT,
+      quantity,
+      reason,
+      referenceNumber,
+      notes,
+      createdBy: userId,
+    });
 
-    // Atomic update preventing negative quantity
-    const product = await Product.findOneAndUpdate(
-      { _id: productId, isActive: true, quantity: { $gte: quantity } },
-      { $inc: { quantity: -quantity } },
-      { new: true, ...sessionOption }
-    );
-
-    if (!product) {
-      if (useTransaction) await dbSession.abortTransaction();
-      const existing = await Product.findById(productId);
-      if (!existing || !existing.isActive) {
-        throw { status: 404, message: 'Product not found or inactive' };
-      }
-      throw {
-        status: 400,
-        message: `Insufficient stock. Available: ${existing.quantity}, Requested: ${quantity}`,
-      };
-    }
-
-    const transactionDocs = await StockTransaction.create(
-      [
-        {
-          product: productId,
-          transactionType: TRANSACTION_TYPES.STOCK_OUT,
-          quantity,
-          reason,
-          referenceNumber,
-          notes,
-          createdBy: userId,
-        },
-      ],
-      sessionOption
-    );
-
-    if (useTransaction) {
-      await dbSession.commitTransaction();
-    }
-
-    return { transaction: transactionDocs[0], product };
+    return { transaction, product };
   } catch (err) {
-    if (useTransaction && dbSession) {
-      try {
-        await dbSession.abortTransaction();
-      } catch (abortErr) {
-        // ignore rollback abort errors
-      }
-    }
+    // Compensating rollback: restore the quantity if transaction log fails
+    await Product.findByIdAndUpdate(productId, { $inc: { quantity: quantity } });
     throw err;
-  } finally {
-    if (dbSession) {
-      dbSession.endSession();
-    }
   }
 }
 
