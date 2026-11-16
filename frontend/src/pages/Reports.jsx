@@ -14,7 +14,7 @@ import {
   ArrowDownToLine,
   ArrowUpFromLine,
   AlertTriangle,
-  DollarSign,
+  IndianRupee,
   Loader2,
 } from 'lucide-react';
 import { formatCurrency, formatDate, downloadCsv, getErrorMessage } from '../utils/helpers';
@@ -164,7 +164,7 @@ export default function Reports() {
     { id: 'stock-in', label: 'Stock Receipts', icon: ArrowDownToLine },
     { id: 'stock-out', label: 'Stock Dispatches', icon: ArrowUpFromLine },
     { id: 'low-stock', label: 'Low Stock Report', icon: AlertTriangle },
-    { id: 'valuation', label: 'Valuation Audit', icon: DollarSign },
+    { id: 'valuation', label: 'Valuation Audit', icon: IndianRupee },
   ];
 
   return (

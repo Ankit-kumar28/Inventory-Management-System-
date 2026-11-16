@@ -7,7 +7,7 @@ import {
   Boxes,
   AlertTriangle,
   XCircle,
-  DollarSign,
+  IndianRupee,
   TrendingUp,
 } from 'lucide-react';
 import { PageLoader } from '../components/common/LoadingSpinner';
@@ -115,7 +115,7 @@ export default function Dashboard() {
         <StatCard
           label="Total Inventory Value"
           value={formatCurrency(stats?.totalInventoryValue || 0)}
-          icon={DollarSign}
+          icon={IndianRupee}
           color="success"
           sub="At unit purchase price"
         />

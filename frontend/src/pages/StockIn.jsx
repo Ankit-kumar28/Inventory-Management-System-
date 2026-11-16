@@ -263,7 +263,7 @@ export default function StockIn() {
             </div>
 
             <div>
-              <label className="label">Purchase Price Per Unit ($)</label>
+              <label className="label">Purchase Price Per Unit (₹)</label>
               <input
                 type="number"
                 step="0.01"

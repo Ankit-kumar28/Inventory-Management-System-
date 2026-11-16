@@ -459,7 +459,7 @@ export default function Products() {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="label">Purchase Price ($) *</label>
+              <label className="label">Purchase Price (₹) *</label>
               <input
                 type="number"
                 step="0.01"
@@ -472,7 +472,7 @@ export default function Products() {
               />
             </div>
             <div>
-              <label className="label">Selling Price ($) *</label>
+              <label className="label">Selling Price (₹) *</label>
               <input
                 type="number"
                 step="0.01"
