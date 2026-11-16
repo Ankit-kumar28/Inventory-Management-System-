@@ -1,14 +1,21 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { dashboardApi } from '../services/api';
 import {
   Package,
-  Tags,
-  Truck,
   Boxes,
   AlertTriangle,
   XCircle,
   IndianRupee,
   TrendingUp,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Plus,
+  Minus,
+  FileBarChart,
+  Layers,
+  Building2,
+  CheckCircle2,
 } from 'lucide-react';
 import { PageLoader } from '../components/common/LoadingSpinner';
 import {
@@ -23,27 +30,64 @@ import {
 } from 'recharts';
 import { formatCurrency, formatDate } from '../utils/helpers';
 
-function StatCard({ label, value, icon: Icon, color = 'accent', sub }) {
-  const colorStyles = {
-    accent: 'text-accent-600 bg-accent-50 border border-accent-100',
-    success: 'text-success-600 bg-success-50 border border-success-100',
-    warning: 'text-warning-600 bg-warning-50 border border-warning-100',
-    danger: 'text-danger-600 bg-danger-50 border border-danger-100',
-    slate: 'text-slate-600 bg-slate-100 border border-slate-200',
+// Refined Linear/Stripe style Metric Card
+function MetricCard({ label, value, sub, status, icon: Icon }) {
+  const statusConfig = {
+    normal: { dot: 'bg-emerald-500', text: 'text-emerald-700 bg-emerald-50 border-emerald-200/80' },
+    warning: { dot: 'bg-amber-500', text: 'text-amber-700 bg-amber-50 border-amber-200/80' },
+    danger: { dot: 'bg-rose-500', text: 'text-rose-700 bg-rose-50 border-rose-200/80' },
+    neutral: { dot: 'bg-slate-400', text: 'text-slate-600 bg-slate-50 border-slate-200' },
   };
 
+  const currentStatus = statusConfig[status] || statusConfig.neutral;
+
   return (
-    <div className="stat-card flex items-start gap-4">
-      <div className={`p-2.5 rounded-lg shrink-0 ${colorStyles[color] || colorStyles.slate}`}>
-        <Icon className="w-5 h-5" />
+    <div className="bg-white border border-slate-200/90 hover:border-slate-300 rounded-lg p-4 transition-all duration-150 shadow-2xs hover:shadow-xs flex flex-col justify-between">
+      <div>
+        <div className="flex items-center justify-between text-slate-500 mb-2">
+          <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-500">
+            {label}
+          </span>
+          {Icon && <Icon className="w-4 h-4 text-slate-400" />}
+        </div>
+        <div className="text-2xl font-bold tracking-tight text-slate-900 font-sans">
+          {value ?? '—'}
+        </div>
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p>
-        <p className="text-xl font-bold text-slate-900 mt-1 truncate">{value ?? '—'}</p>
-        {sub && <p className="text-[11px] text-slate-400 mt-0.5">{sub}</p>}
-      </div>
+      {sub && (
+        <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px]">
+          <span className="text-slate-500">{sub}</span>
+          {status && (
+            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium border ${currentStatus.text}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${currentStatus.dot}`} />
+              {status.toUpperCase()}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
+}
+
+// Custom Recharts Tooltip for elegant dark SaaS style
+function CustomChartTooltip({ active, payload, label }) {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-900/95 backdrop-blur-md text-white text-xs px-3 py-2 rounded-md shadow-xl border border-slate-800">
+        <p className="font-semibold text-slate-300 mb-1">{label}</p>
+        {payload.map((item, idx) => (
+          <div key={idx} className="flex items-center justify-between gap-4 py-0.5">
+            <span className="flex items-center gap-1.5 text-slate-400 capitalize">
+              <span className="w-2 h-2 rounded-xs" style={{ backgroundColor: item.color }} />
+              {item.name}:
+            </span>
+            <span className="font-mono font-bold text-white">{item.value}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return null;
 }
 
 export default function Dashboard() {
@@ -89,112 +133,142 @@ export default function Dashboard() {
     a.date.localeCompare(b.date)
   );
 
+  const availabilityRate = stats?.totalProducts > 0
+    ? Math.round(((stats.totalProducts - (stats.outOfStockProducts || 0)) / stats.totalProducts) * 100)
+    : 100;
+
   return (
     <div className="space-y-6">
-      <div className="page-header">
+      {/* Page Title & Operational Quick Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-2 border-b border-slate-200/80">
         <div>
-          <h1 className="page-title">Executive Dashboard</h1>
-          <p className="page-subtitle">Real-time inventory levels, valuation, and movements</p>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">Enterprise Overview</h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Real-time multi-channel inventory health, valuation, and movements
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/stock-in"
+            className="btn btn-secondary text-xs"
+          >
+            <Plus className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Stock In</span>
+          </Link>
+          <Link
+            to="/stock-out"
+            className="btn btn-secondary text-xs"
+          >
+            <Minus className="w-3.5 h-3.5 text-rose-600" />
+            <span>Stock Out</span>
+          </Link>
+          <Link
+            to="/reports"
+            className="btn btn-primary text-xs"
+          >
+            <FileBarChart className="w-3.5 h-3.5" />
+            <span>Export Report</span>
+          </Link>
         </div>
       </div>
 
       {/* Primary KPI Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Total Products"
-          value={stats?.totalProducts}
-          icon={Package}
-          color="accent"
-        />
-        <StatCard
-          label="Total Stock Units"
-          value={stats?.totalStockUnits?.toLocaleString()}
-          icon={Boxes}
-          color="success"
-        />
-        <StatCard
+        <MetricCard
           label="Total Inventory Value"
           value={formatCurrency(stats?.totalInventoryValue || 0)}
+          sub="At purchase price"
+          status="normal"
           icon={IndianRupee}
-          color="success"
-          sub="At unit purchase price"
         />
-        <StatCard
-          label="Suppliers & Categories"
-          value={`${stats?.totalSuppliers || 0} / ${stats?.totalCategories || 0}`}
-          icon={Truck}
-          color="slate"
-          sub="Partners & Classifications"
+        <MetricCard
+          label="Total Stock Units"
+          value={stats?.totalStockUnits?.toLocaleString() || '0'}
+          sub="On-hand physically"
+          status="normal"
+          icon={Boxes}
+        />
+        <MetricCard
+          label="Total Catalog SKUs"
+          value={stats?.totalProducts || 0}
+          sub="Active master records"
+          status="neutral"
+          icon={Package}
+        />
+        <MetricCard
+          label="SKU Fulfillment Rate"
+          value={`${availabilityRate}%`}
+          sub="In-stock availability"
+          status={availabilityRate >= 90 ? 'normal' : 'warning'}
+          icon={TrendingUp}
         />
       </div>
 
       {/* Secondary KPI Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Low Stock Alerts"
-          value={stats?.lowStockProducts}
-          icon={AlertTriangle}
-          color="warning"
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <MetricCard
+          label="Low Stock Items"
+          value={stats?.lowStockProducts || 0}
           sub="At or below minimum threshold"
+          status={stats?.lowStockProducts > 0 ? 'warning' : 'normal'}
+          icon={AlertTriangle}
         />
-        <StatCard
-          label="Out of Stock"
-          value={stats?.outOfStockProducts}
+        <MetricCard
+          label="Out of Stock SKUs"
+          value={stats?.outOfStockProducts || 0}
+          sub="Zero quantity available"
+          status={stats?.outOfStockProducts > 0 ? 'danger' : 'normal'}
           icon={XCircle}
-          color="danger"
-          sub="Immediate reorder needed"
         />
-        <StatCard
-          label="In-Stock Health"
-          value={`${
-            stats?.totalProducts > 0
-              ? Math.round(
-                  ((stats.totalProducts - (stats.outOfStockProducts || 0)) / stats.totalProducts) *
-                    100
-                )
-              : 100
-          }%`}
-          icon={TrendingUp}
-          color="accent"
-          sub="SKU availability rate"
-        />
-        <StatCard
-          label="Active Categories"
-          value={stats?.totalCategories}
-          icon={Tags}
-          color="slate"
+        <MetricCard
+          label="Suppliers & Categories"
+          value={`${stats?.totalSuppliers || 0} / ${stats?.totalCategories || 0}`}
+          sub="Supply partners & item groups"
+          status="neutral"
+          icon={Building2}
         />
       </div>
 
-      {/* Analytics Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-700">
-              7-Day Movement Analysis
-            </h3>
-            <span className="text-[11px] text-slate-400">Inbound vs Outbound</span>
+      {/* Analytics Charts Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="bg-white border border-slate-200/90 rounded-lg p-4 shadow-2xs">
+          <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                7-Day Inward / Outward Velocity
+              </h3>
+              <p className="text-[11px] text-slate-400">Daily physical quantity delta</p>
+            </div>
+            <div className="flex items-center gap-3 text-[11px] font-medium">
+              <span className="flex items-center gap-1.5 text-slate-600">
+                <span className="w-2.5 h-2.5 rounded-xs bg-emerald-600" />
+                Inward
+              </span>
+              <span className="flex items-center gap-1.5 text-slate-600">
+                <span className="w-2.5 h-2.5 rounded-xs bg-rose-500" />
+                Outward
+              </span>
+            </div>
           </div>
           {movementChartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={movementChartData} barSize={14}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+            <ResponsiveContainer width="100%" height={230}>
+              <BarChart data={movementChartData} barSize={12}>
+                <CartesianGrid strokeDasharray="2 2" stroke="#F1F5F9" vertical={false} />
                 <XAxis
                   dataKey="date"
                   tick={{ fontSize: 11, fill: '#64748B' }}
                   tickFormatter={(v) => v.slice(5)}
+                  axisLine={{ stroke: '#E2E8F0' }}
+                  tickLine={false}
                 />
-                <YAxis tick={{ fontSize: 11, fill: '#64748B' }} />
-                <Tooltip
-                  contentStyle={{
-                    fontSize: '12px',
-                    borderRadius: '6px',
-                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
-                  }}
+                <YAxis
+                  tick={{ fontSize: 11, fill: '#64748B' }}
+                  axisLine={{ stroke: '#E2E8F0' }}
+                  tickLine={false}
                 />
-                <Legend iconType="square" iconSize={8} wrapperStyle={{ fontSize: '11px' }} />
-                <Bar dataKey="stock-in" name="Stock In" fill="#16A34A" radius={[2, 2, 0, 0]} />
-                <Bar dataKey="stock-out" name="Stock Out" fill="#DC2626" radius={[2, 2, 0, 0]} />
+                <Tooltip content={<CustomChartTooltip />} />
+                <Bar dataKey="stock-in" name="Stock In" fill="#059669" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="stock-out" name="Stock Out" fill="#E11D48" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -204,32 +278,38 @@ export default function Dashboard() {
           )}
         </div>
 
-        <div className="card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-700">
-              Top Products by On-Hand Stock
-            </h3>
-            <span className="text-[11px] text-slate-400">Highest volume items</span>
+        <div className="bg-white border border-slate-200/90 rounded-lg p-4 shadow-2xs">
+          <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                Top Inventory SKUs By Volume
+              </h3>
+              <p className="text-[11px] text-slate-400">Highest quantity on-hand items</p>
+            </div>
+            <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+              UNITS
+            </span>
           </div>
           {overview?.topProducts?.length > 0 ? (
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={overview.topProducts} layout="vertical" barSize={12}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 11, fill: '#64748B' }} />
+            <ResponsiveContainer width="100%" height={230}>
+              <BarChart data={overview.topProducts} layout="vertical" barSize={10}>
+                <CartesianGrid strokeDasharray="2 2" stroke="#F1F5F9" horizontal={false} />
+                <XAxis
+                  type="number"
+                  tick={{ fontSize: 11, fill: '#64748B' }}
+                  axisLine={{ stroke: '#E2E8F0' }}
+                  tickLine={false}
+                />
                 <YAxis
                   type="category"
                   dataKey="productName"
                   width={110}
-                  tick={{ fontSize: 10, fill: '#334155' }}
+                  tick={{ fontSize: 11, fill: '#334155' }}
+                  axisLine={{ stroke: '#E2E8F0' }}
+                  tickLine={false}
                 />
-                <Tooltip
-                  contentStyle={{
-                    fontSize: '12px',
-                    borderRadius: '6px',
-                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
-                  }}
-                />
-                <Bar dataKey="quantity" name="Units" fill="#2563EB" radius={[0, 2, 2, 0]} />
+                <Tooltip content={<CustomChartTooltip />} />
+                <Bar dataKey="quantity" name="Units" fill="#3B82F6" radius={[0, 3, 3, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -239,50 +319,72 @@ export default function Dashboard() {
       </div>
 
       {/* Recent Activity Table */}
-      <div className="card overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-700">
-            Recent Audit & Stock Operations
-          </h3>
-          <span className="text-[11px] text-slate-400">Latest 8 events</span>
+      <div className="bg-white border border-slate-200/90 rounded-lg shadow-2xs overflow-hidden">
+        <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50/60">
+          <div>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+              Recent Inventory Audit Trail
+            </h3>
+            <p className="text-[11px] text-slate-400">Latest recorded transactions</p>
+          </div>
+          <Link
+            to="/transactions"
+            className="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
+          >
+            View all audit records →
+          </Link>
         </div>
         {recentTxns.length === 0 ? (
           <div className="py-12 text-center text-xs text-slate-400">No transactions recorded yet</div>
         ) : (
-          <div className="table-wrapper rounded-none border-0">
+          <div className="overflow-x-auto">
             <table className="table">
               <thead>
                 <tr>
-                  <th>Product</th>
+                  <th>Product & SKU</th>
                   <th>Type</th>
-                  <th>Units</th>
-                  <th>Recorded By</th>
-                  <th>Date</th>
+                  <th>Quantity</th>
+                  <th>Operator</th>
+                  <th>Timestamp</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {recentTxns.map((t) => (
-                  <tr key={t._id}>
-                    <td className="font-medium text-slate-900">
-                      {t.product?.productName || '—'}
-                      <span className="block text-[11px] text-slate-400 font-mono">
-                        {t.product?.sku}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className={
-                          t.transactionType === 'stock-in' ? 'badge-success' : 'badge-danger'
-                        }
-                      >
-                        {t.transactionType}
-                      </span>
-                    </td>
-                    <td className="font-semibold text-slate-900">{t.quantity}</td>
-                    <td className="text-slate-600">{t.createdBy?.fullName || '—'}</td>
-                    <td className="text-slate-500 text-xs">{formatDate(t.createdAt)}</td>
-                  </tr>
-                ))}
+                {recentTxns.map((t) => {
+                  const isIn = t.transactionType === 'stock-in';
+                  return (
+                    <tr key={t._id}>
+                      <td>
+                        <span className="font-semibold text-slate-900 block">
+                          {t.product?.productName || '—'}
+                        </span>
+                        <span className="font-mono text-[11px] text-slate-400">
+                          {t.product?.sku}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+                            isIn
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-rose-50 text-rose-700 border-rose-200'
+                          }`}
+                        >
+                          {isIn ? (
+                            <ArrowDownLeft className="w-3 h-3 text-emerald-600" />
+                          ) : (
+                            <ArrowUpRight className="w-3 h-3 text-rose-600" />
+                          )}
+                          {isIn ? 'Stock In' : 'Stock Out'}
+                        </span>
+                      </td>
+                      <td className="font-mono font-bold text-slate-900">
+                        {isIn ? `+${t.quantity}` : `-${t.quantity}`}
+                      </td>
+                      <td className="text-slate-600 text-xs">{t.createdBy?.fullName || '—'}</td>
+                      <td className="text-slate-400 text-xs font-mono">{formatDate(t.createdAt)}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
