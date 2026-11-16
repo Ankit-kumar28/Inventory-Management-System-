@@ -29,9 +29,13 @@ export default function Login() {
       await login(form.email, form.password);
       navigate('/dashboard');
     } catch (err) {
-      setError(
-        err.response?.data?.message || 'Authentication failed. Please check your credentials.'
-      );
+      if (!err.response) {
+        setError('Cannot connect to API server. Please verify backend is running on port 5001.');
+      } else {
+        setError(
+          err.response?.data?.message || 'Invalid email or password. Please check your credentials.'
+        );
+      }
     } finally {
       setLoading(false);
     }
